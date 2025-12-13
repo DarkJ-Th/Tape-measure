@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" width=device-width, initial-scale=1.0">
+    <title>กล้องวัดระยะทาง AR</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #camera {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            pointer-events: none;
+            display: none;
+        }
+
+        .crosshair::before,
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+        }
+
+        .crosshair::before {
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            transform: translateY(-50%);
+        }
+
+        .crosshair::after {
+            left: 50%;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            transform: translateX(-50%);
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+            pointer-events: auto;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #measureBtn {
+            background: linear-gradient(135deg, #00ff88, #00cc66);
+            color: white;
+        }
+
+        #measureBtn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,255,136,0.4);
+        }
+
+        #clearBtn {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+            color: white;
+        }
+
+        #clearBtn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255,68,68,0.4);
+        }
+
+        #startBtn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-size: 18px;
+            padding: 20px 40px;
+        }
+
+        #startBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102,126,234,0.5);
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 15px;
+            font-size: 14px;
+            max-width: 300px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            display: none;
+        }
+
+        #distance {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -120px);
+            background: rgba(0,255,136,0.9);
+            color: black;
+            padding: 20px 30px;
+            border-radius: 20px;
+            font-size: 32px;
+            font-weight: bold;
+            display: none;
+            box-shadow: 0 8px 32px rgba(0,255,136,0.3);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -120px) scale(1); }
+            50% { transform: translate(-50%, -120px) scale(1.05); }
+        }
+
+        #welcomeScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            z-index: 1000;
+        }
+
+        #welcomeScreen h1 {
+            font-size: 42px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+        }
+
+        #welcomeScreen p {
+            font-size: 18px;
+            margin-bottom: 15px;
+            max-width: 500px;
+            line-height: 1.6;
+        }
+
+        .feature-list {
+            background: rgba(255,255,255,0.1);
+            padding: 20px 30px;
+            border-radius: 15px;
+            margin: 20px 0 30px 0;
+            backdrop-filter: blur(10px);
+            text-align: left;
+        }
+
+        .feature-list div {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+
+        #errorScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            z-index: 1000;
+        }
+
+        #errorScreen h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+
+        .error-box {
+            background: rgba(255,255,255,0.15);
+            padding: 25px;
+            border-radius: 20px;
+            max-width: 500px;
+            backdrop-filter: blur(10px);
+            margin: 20px 0;
+        }
+
+        .error-box p {
+            font-size: 16px;
+            line-height: 1.8;
+            margin: 10px 0;
+        }
+
+        .error-box strong {
+            display: block;
+            margin-top: 15px;
+            font-size: 18px;
+        }
+
+        .point {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #00ff88;
+            border: 2px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px #00ff88;
+            animation: pointPulse 1s infinite;
+        }
+
+        @keyframes pointPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.3); }
+        }
+
+        .line {
+            position: absolute;
+            background: #00ff88;
+            height: 3px;
+            transform-origin: left center;
+            box-shadow: 0 0 10px #00ff88;
+        }
+
+        #retryBtn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-size: 18px;
+            padding: 20px 40px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <video id="camera" autoplay playsinline></video>
+        <canvas id="canvas"></canvas>
+        
+        <div class="overlay">
+            <div class="crosshair"></div>
+        </div>
+
+        <div id="welcomeScreen">
+            <h1>📏 กล้องวัดระยะทาง</h1>
+            <p>แอปพลิเคชันสำหรับวัดระยะทางวัตถุด้วยกล้อง</p>
+            
+            <div class="feature-list">
+                <div>✨ วัดระยะทางง่ายๆ ด้วยกล้อง</div>
+                <div>🎯 เล็งแม่นยำด้วยกากบาท</div>
+                <div>📱 รองรับทั้งมือถือและคอมพิวเตอร์</div>
+                <div>🌟 แสดงผลเป็นเมตรและเซนติเมตร</div>
+            </div>
+
+            <p style="font-size: 14px; opacity: 0.9;">
+                ⚠️ แอปนี้ต้องการอนุญาตเข้าถึงกล้อง<br>
+                กรุณากดปุ่ม "อนุญาต" เมื่อ browser ถามสิทธิ์
+            </p>
+
+            <button id="startBtn">🚀 เริ่มใช้งาน</button>
+        </div>
+
+        <div id="errorScreen">
+            <h2>❌ ไม่สามารถเข้าถึงกล้องได้</h2>
+            
+            <div class="error-box">
+                <p><strong>กรุณาตรวจสอบ:</strong></p>
+                <p>✓ คุณได้กดปุ่ม "อนุญาต" เมื่อ browser ขอสิทธิ์หรือไม่</p>
+                <p>✓ Browser รองรับการเข้าถึงกล้อง (Chrome, Safari, Edge)</p>
+                <p>✓ กล้องไม่ถูกใช้งานโดยแอปอื่น</p>
+                <p>✓ เว็บไซต์ต้องรันผ่าน HTTPS หรือ localhost</p>
+                
+                <strong>วิธีแก้ไข:</strong>
+                <p>1. ลองรีเฟรชหน้าเว็บ แล้วกดอนุญาตอีกครั้ง</p>
+                <p>2. ตรวจสอบการตั้งค่าสิทธิ์กล้องใน browser</p>
+                <p>3. ลองใช้ browser อื่น</p>
+            </div>
+
+            <button id="retryBtn">🔄 ลองอีกครั้ง</button>
+        </div>
+
+        <div id="info">
+            📏 <strong>วิธีใช้งาน:</strong><br>
+            1. เล็งกล้องไปที่วัตถุ<br>
+            2. กดปุ่มวัดครั้งแรก (จุดเริ่มต้น)<br>
+            3. เคลื่อนที่ไปยังจุดสิ้นสุด<br>
+            4. กดปุ่มวัดอีกครั้ง<br>
+            5. ดูระยะทางที่วัดได้
+        </div>
+
+        <div id="distance"></div>
+
+        <div id="controls" style="display: none;">
+            <button id="measureBtn" disabled>📍 วัดระยะ</button>
+            <button id="clearBtn">🔄 ล้างข้อมูล</button>
+        </div>
+    </div>
+
+    <script>
+        let video, canvas, ctx;
+        let points = [];
+        let cameraReady = false;
+
+        async function initCamera() {
+            video = document.getElementById('camera');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+                
+                video.srcObject = stream;
+                
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    cameraReady = true;
+                    
+                    // แสดง UI สำหรับการวัด
+                    document.getElementById('welcomeScreen').style.display = 'none';
+                    document.getElementById('errorScreen').style.display = 'none';
+                    document.getElementById('camera').style.display = 'block';
+                    document.querySelector('.crosshair').style.display = 'block';
+                    document.getElementById('info').style.display = 'block';
+                    document.getElementById('controls').style.display = 'flex';
+                    document.getElementById('measureBtn').disabled = false;
+                };
+                
+            } catch (err) {
+                console.error('Camera error:', err);
+                showError();
+            }
+        }
+
+        function showError() {
+            document.getElementById('welcomeScreen').style.display = 'none';
+            document.getElementById('errorScreen').style.display = 'flex';
+        }
+
+        document.getElementById('startBtn').addEventListener('click', () => {
+            initCamera();
+        });
+
+        document.getElementById('retryBtn').addEventListener('click', () => {
+            document.getElementById('errorScreen').style.display = 'none';
+            document.getElementById('welcomeScreen').style.display = 'flex';
+        });
+
+        document.getElementById('measureBtn').addEventListener('click', () => {
+            if (!cameraReady) return;
+            
+            if (points.length < 2) {
+                const centerX = window.innerWidth / 2;
+                const centerY = window.innerHeight / 2;
+                
+                addPoint(centerX, centerY);
+                
+                if (points.length === 2) {
+                    calculateDistance();
+                }
+            }
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            points = [];
+            document.querySelectorAll('.point, .line').forEach(el => el.remove());
+            document.getElementById('distance').style.display = 'none';
+        });
+
+        function addPoint(x, y) {
+            const point = document.createElement('div');
+            point.className = 'point';
+            point.style.left = x + 'px';
+            point.style.top = y + 'px';
+            document.getElementById('container').appendChild(point);
+            
+            points.push({ x, y, element: point });
+        }
+
+        function calculateDistance() {
+            if (points.length !== 2) return;
+
+            const p1 = points[0];
+            const p2 = points[1];
+
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const pixelDistance = Math.sqrt(dx * dx + dy * dy);
+
+            const screenWidth = window.innerWidth;
+            const cameraHeight = 1.5;
+            
+            const estimatedDistance = (pixelDistance / screenWidth) * cameraHeight * 5;
+            
+            const distanceDiv = document.getElementById('distance');
+            if (estimatedDistance < 1) {
+                distanceDiv.textContent = `${(estimatedDistance * 100).toFixed(0)} ซม.`;
+            } else {
+                distanceDiv.textContent = `${estimatedDistance.toFixed(2)} ม.`;
+            }
+            distanceDiv.style.display = 'block';
+
+            drawLine(p1, p2);
+        }
+
+        function drawLine(p1, p2) {
+            const line = document.createElement('div');
+            line.className = 'line';
+            
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            
+            line.style.width = length + 'px';
+            line.style.left = p1.x + 'px';
+            line.style.top = p1.y + 'px';
+            line.style.transform = `rotate(${angle}deg)`;
+            
+            document.getElementById('container').appendChild(line);
+        }
+    </script>
+</body>
+</html>
