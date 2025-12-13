@@ -2,25 +2,35 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>กล้องวัดระยะทาง AR</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            touch-action: none;
         }
 
         #container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
         }
 
         #camera {
@@ -28,6 +38,9 @@
             height: 100%;
             object-fit: cover;
             display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
 
         #canvas {
@@ -39,63 +52,32 @@
             pointer-events: none;
         }
 
-        .overlay {
+        #tapOverlay {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none;
-        }
-
-        .crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 40px;
-            height: 40px;
-            pointer-events: none;
+            z-index: 900;
+            cursor: crosshair;
             display: none;
         }
 
-        .crosshair::before,
-        .crosshair::after {
-            content: '';
-            position: absolute;
-            background: #00ff00;
-            box-shadow: 0 0 10px #00ff00;
-        }
-
-        .crosshair::before {
-            top: 50%;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            transform: translateY(-50%);
-        }
-
-        .crosshair::after {
-            left: 50%;
-            top: 0;
-            width: 2px;
-            height: 100%;
-            transform: translateX(-50%);
-        }
-
         #controls {
-            position: absolute;
-            bottom: 20px;
+            position: fixed;
+            bottom: max(20px, env(safe-area-inset-bottom, 20px));
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 15px;
-            z-index: 100;
+            flex-direction: row;
+            gap: 12px;
+            z-index: 1000;
             pointer-events: auto;
+            padding: 0 10px;
         }
 
         button {
-            padding: 15px 30px;
+            padding: 15px 25px;
             font-size: 16px;
             font-weight: bold;
             border: none;
@@ -103,6 +85,8 @@
             cursor: pointer;
             transition: all 0.3s;
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
 
         button:disabled {
@@ -110,14 +94,8 @@
             cursor: not-allowed;
         }
 
-        #measureBtn {
-            background: linear-gradient(135deg, #00ff88, #00cc66);
-            color: white;
-        }
-
-        #measureBtn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,255,136,0.4);
+        button:active:not(:disabled) {
+            transform: scale(0.95);
         }
 
         #clearBtn {
@@ -125,60 +103,85 @@
             color: white;
         }
 
-        #clearBtn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(255,68,68,0.4);
+        #undoBtn {
+            background: linear-gradient(135deg, #ffa500, #ff8c00);
+            color: white;
         }
 
         #startBtn {
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             font-size: 18px;
-            padding: 20px 40px;
-        }
-
-        #startBtn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102,126,234,0.5);
+            padding: 18px 35px;
         }
 
         #info {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(0,0,0,0.8);
+            position: fixed;
+            top: max(20px, env(safe-area-inset-top, 20px));
+            left: 15px;
+            right: 15px;
+            background: rgba(0,0,0,0.85);
             color: white;
-            padding: 15px 20px;
-            border-radius: 15px;
-            font-size: 14px;
-            max-width: 300px;
+            padding: 12px 18px;
+            border-radius: 12px;
+            font-size: 13px;
+            line-height: 1.5;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.1);
             display: none;
+            z-index: 999;
+            max-width: 350px;
         }
 
-        #distance {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -120px);
-            background: rgba(0,255,136,0.9);
-            color: black;
-            padding: 20px 30px;
-            border-radius: 20px;
-            font-size: 32px;
-            font-weight: bold;
+        #calibration {
+            position: fixed;
+            top: max(20px, env(safe-area-inset-top, 20px));
+            right: 15px;
+            background: rgba(0,0,0,0.85);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 15px;
+            font-size: 13px;
+            line-height: 1.5;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
             display: none;
-            box-shadow: 0 8px 32px rgba(0,255,136,0.3);
-            animation: pulse 1.5s infinite;
+            z-index: 999;
+            max-width: 280px;
         }
 
-        @keyframes pulse {
-            0%, 100% { transform: translate(-50%, -120px) scale(1); }
-            50% { transform: translate(-50%, -120px) scale(1.05); }
+        #calibration label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 8px 0;
         }
 
-        #welcomeScreen {
+        #calibration input[type="range"] {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.2);
+            outline: none;
+        }
+
+        #calibration input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #00ff88;
+            cursor: pointer;
+        }
+
+        #calibration .value {
+            min-width: 50px;
+            text-align: right;
+            font-weight: bold;
+            color: #00ff88;
+        }
+
+        #welcomeScreen, #errorScreen {
             position: absolute;
             top: 0;
             left: 0;
@@ -188,114 +191,156 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 30px;
             text-align: center;
             z-index: 1000;
         }
 
+        #welcomeScreen {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        #errorScreen {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            display: none;
+        }
+
         #welcomeScreen h1 {
-            font-size: 42px;
-            margin-bottom: 20px;
+            font-size: clamp(28px, 8vw, 48px);
+            margin-bottom: 15px;
             text-shadow: 2px 2px 10px rgba(0,0,0,0.3);
         }
 
-        #welcomeScreen p {
-            font-size: 18px;
-            margin-bottom: 15px;
-            max-width: 500px;
+        #welcomeScreen p, #errorScreen p {
+            font-size: clamp(14px, 4vw, 18px);
+            margin-bottom: 12px;
+            max-width: 90%;
             line-height: 1.6;
         }
 
         .feature-list {
             background: rgba(255,255,255,0.1);
-            padding: 20px 30px;
+            padding: 20px 25px;
             border-radius: 15px;
-            margin: 20px 0 30px 0;
+            margin: 15px 0 25px 0;
             backdrop-filter: blur(10px);
             text-align: left;
+            max-width: 90%;
         }
 
         .feature-list div {
-            margin: 10px 0;
-            font-size: 16px;
-        }
-
-        #errorScreen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-            z-index: 1000;
+            margin: 8px 0;
+            font-size: 15px;
         }
 
         #errorScreen h2 {
-            font-size: 36px;
-            margin-bottom: 20px;
+            font-size: clamp(24px, 7vw, 36px);
+            margin-bottom: 15px;
         }
 
         .error-box {
             background: rgba(255,255,255,0.15);
-            padding: 25px;
+            padding: 20px;
             border-radius: 20px;
-            max-width: 500px;
+            max-width: 90%;
             backdrop-filter: blur(10px);
-            margin: 20px 0;
+            margin: 15px 0;
         }
 
         .error-box p {
-            font-size: 16px;
+            font-size: 15px;
             line-height: 1.8;
-            margin: 10px 0;
+            margin: 8px 0;
         }
 
         .error-box strong {
             display: block;
-            margin-top: 15px;
-            font-size: 18px;
+            margin-top: 12px;
+            font-size: 16px;
         }
 
         .point {
             position: absolute;
-            width: 12px;
-            height: 12px;
+            width: 20px;
+            height: 20px;
             background: #00ff88;
-            border: 2px solid white;
+            border: 3px solid white;
             border-radius: 50%;
             transform: translate(-50%, -50%);
-            box-shadow: 0 0 15px #00ff88;
-            animation: pointPulse 1s infinite;
+            box-shadow: 0 0 20px #00ff88, 0 0 40px rgba(0,255,136,0.5);
+            animation: pointPulse 1.5s infinite;
+            z-index: 9999;
+            pointer-events: none;
         }
 
         @keyframes pointPulse {
             0%, 100% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-50%, -50%) scale(1.3); }
+            50% { transform: translate(-50%, -50%) scale(1.15); }
         }
 
         .line {
             position: absolute;
             background: #00ff88;
-            height: 3px;
+            height: 4px;
             transform-origin: left center;
-            box-shadow: 0 0 10px #00ff88;
+            box-shadow: 0 0 10px #00ff88, 0 0 20px rgba(0,255,136,0.3);
+            z-index: 9998;
+            pointer-events: none;
         }
 
-        #retryBtn {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
+        .distance-label {
+            position: absolute;
+            background: rgba(0,255,136,0.95);
+            color: black;
+            padding: 8px 15px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: bold;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 4px 15px rgba(0,255,136,0.4);
+            z-index: 10000;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        #tapHint {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,255,136,0.9);
+            color: black;
+            padding: 20px 30px;
+            border-radius: 15px;
             font-size: 18px;
-            padding: 20px 40px;
-            margin-top: 20px;
+            font-weight: bold;
+            display: none;
+            z-index: 950;
+            animation: bounce 1s infinite;
+            box-shadow: 0 4px 20px rgba(0,255,136,0.5);
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+            50% { transform: translate(-50%, -50%) translateY(-10px); }
+        }
+
+        #totalDistance {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(102,126,234,0.95);
+            color: white;
+            padding: 25px 35px;
+            border-radius: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            display: none;
+            z-index: 998;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(102,126,234,0.5);
         }
     </style>
 </head>
@@ -304,24 +349,22 @@
         <video id="camera" autoplay playsinline></video>
         <canvas id="canvas"></canvas>
         
-        <div class="overlay">
-            <div class="crosshair"></div>
-        </div>
+        <div id="tapOverlay"></div>
+        <div id="tapHint">👆 แตะเพื่อมาร์คจุดแรก</div>
 
         <div id="welcomeScreen">
-            <h1>📏 กล้องวัดระยะทาง</h1>
-            <p>แอปพลิเคชันสำหรับวัดระยะทางวัตถุด้วยกล้อง</p>
+            <h1>📏 กล้องวัดระยะทาง AR</h1>
+            <p>วัดระยะทางแบบมืออาชีพด้วยกล้อง</p>
             
             <div class="feature-list">
-                <div>✨ วัดระยะทางง่ายๆ ด้วยกล้อง</div>
-                <div>🎯 เล็งแม่นยำด้วยกากบาท</div>
-                <div>📱 รองรับทั้งมือถือและคอมพิวเตอร์</div>
-                <div>🌟 แสดงผลเป็นเมตรและเซนติเมตร</div>
+                <div>✨ วัดได้หลายจุดต่อเนื่อง</div>
+                <div>📏 แสดงระยะบนเส้นแต่ละช่วง</div>
+                <div>🎯 ปรับแต่งความแม่นยำได้</div>
+                <div>📱 ใช้งานง่ายเพียงแตะหน้าจอ</div>
             </div>
 
             <p style="font-size: 14px; opacity: 0.9;">
-                ⚠️ แอปนี้ต้องการอนุญาตเข้าถึงกล้อง<br>
-                กรุณากดปุ่ม "อนุญาต" เมื่อ browser ถามสิทธิ์
+                ⚠️ กรุณาอนุญาตการเข้าถึงกล้อง
             </p>
 
             <button id="startBtn">🚀 เริ่มใช้งาน</button>
@@ -332,46 +375,91 @@
             
             <div class="error-box">
                 <p><strong>กรุณาตรวจสอบ:</strong></p>
-                <p>✓ คุณได้กดปุ่ม "อนุญาต" เมื่อ browser ขอสิทธิ์หรือไม่</p>
-                <p>✓ Browser รองรับการเข้าถึงกล้อง (Chrome, Safari, Edge)</p>
+                <p>✓ อนุญาตการใช้กล้องใน browser</p>
+                <p>✓ ใช้ browser ที่รองรับ (Chrome, Safari, Edge)</p>
                 <p>✓ กล้องไม่ถูกใช้งานโดยแอปอื่น</p>
-                <p>✓ เว็บไซต์ต้องรันผ่าน HTTPS หรือ localhost</p>
-                
-                <strong>วิธีแก้ไข:</strong>
-                <p>1. ลองรีเฟรชหน้าเว็บ แล้วกดอนุญาตอีกครั้ง</p>
-                <p>2. ตรวจสอบการตั้งค่าสิทธิ์กล้องใน browser</p>
-                <p>3. ลองใช้ browser อื่น</p>
             </div>
 
-            <button id="retryBtn">🔄 ลองอีกครั้ง</button>
+            <button id="retryBtn" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-size: 16px; padding: 16px 30px; margin-top: 15px;">🔄 ลองอีกครั้ง</button>
         </div>
 
         <div id="info">
             📏 <strong>วิธีใช้งาน:</strong><br>
-            1. เล็งกล้องไปที่วัตถุ<br>
-            2. กดปุ่มวัดครั้งแรก (จุดเริ่มต้น)<br>
-            3. เคลื่อนที่ไปยังจุดสิ้นสุด<br>
-            4. กดปุ่มวัดอีกครั้ง<br>
-            5. ดูระยะทางที่วัดได้
+            • แตะหน้าจอเพื่อมาร์คจุด<br>
+            • เลื่อนกล้องและแตะจุดถัดไป<br>
+            • ระยะทางแสดงบนเส้นแต่ละช่วง<br>
+            • กด "↶" เพื่อลบจุดล่าสุด<br>
+            • กด "🔄" เพื่อเริ่มใหม่
         </div>
 
-        <div id="distance"></div>
+        <div id="calibration">
+            <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">⚙️ ปรับแต่ง</div>
+            <label>
+                <span style="min-width: 70px; font-size: 12px;">ระยะกล้อง:</span>
+                <input type="range" id="distanceSlider" min="0.5" max="10" step="0.1" value="2">
+                <span class="value" id="distanceValue">2.0ม</span>
+            </label>
+            <label>
+                <span style="min-width: 70px; font-size: 12px;">ปรับค่า:</span>
+                <input type="range" id="scaleSlider" min="0.3" max="3" step="0.1" value="1">
+                <span class="value" id="scaleValue">1.0x</span>
+            </label>
+        </div>
+
+        <div id="totalDistance"></div>
 
         <div id="controls" style="display: none;">
-            <button id="measureBtn" disabled>📍 วัดระยะ</button>
-            <button id="clearBtn">🔄 ล้างข้อมูล</button>
+            <button id="undoBtn">↶ ลบจุดล่าสุด</button>
+            <button id="clearBtn">🔄 เริ่มใหม่</button>
         </div>
     </div>
 
     <script>
-        let video, canvas, ctx;
+        let video, tapOverlay;
         let points = [];
+        let lines = [];
+        let labels = [];
         let cameraReady = false;
+        let cameraDistance = 2.0;
+        let scaleFactor = 1.0;
+
+        document.addEventListener('DOMContentLoaded', initApp);
+
+        function initApp() {
+            tapOverlay = document.getElementById('tapOverlay');
+            
+            document.getElementById('startBtn').addEventListener('click', () => {
+                initCamera();
+            });
+
+            document.getElementById('retryBtn').addEventListener('click', () => {
+                document.getElementById('errorScreen').style.display = 'none';
+                document.getElementById('welcomeScreen').style.display = 'flex';
+            });
+
+            document.getElementById('clearBtn').addEventListener('click', clearAll);
+            document.getElementById('undoBtn').addEventListener('click', undoLastPoint);
+
+            document.getElementById('distanceSlider').addEventListener('input', (e) => {
+                cameraDistance = parseFloat(e.target.value);
+                document.getElementById('distanceValue').textContent = cameraDistance.toFixed(1) + 'ม';
+                recalculateAll();
+            });
+
+            document.getElementById('scaleSlider').addEventListener('input', (e) => {
+                scaleFactor = parseFloat(e.target.value);
+                document.getElementById('scaleValue').textContent = scaleFactor.toFixed(1) + 'x';
+                recalculateAll();
+            });
+
+            if (tapOverlay) {
+                tapOverlay.addEventListener('click', handleTap);
+                tapOverlay.addEventListener('touchstart', handleTouch);
+            }
+        }
 
         async function initCamera() {
             video = document.getElementById('camera');
-            canvas = document.getElementById('canvas');
-            ctx = canvas.getContext('2d');
 
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -385,18 +473,20 @@
                 video.srcObject = stream;
                 
                 video.onloadedmetadata = () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
                     cameraReady = true;
                     
-                    // แสดง UI สำหรับการวัด
                     document.getElementById('welcomeScreen').style.display = 'none';
                     document.getElementById('errorScreen').style.display = 'none';
                     document.getElementById('camera').style.display = 'block';
-                    document.querySelector('.crosshair').style.display = 'block';
+                    document.getElementById('tapOverlay').style.display = 'block';
+                    document.getElementById('tapHint').style.display = 'block';
                     document.getElementById('info').style.display = 'block';
+                    document.getElementById('calibration').style.display = 'block';
                     document.getElementById('controls').style.display = 'flex';
-                    document.getElementById('measureBtn').disabled = false;
+                    
+                    setTimeout(() => {
+                        document.getElementById('tapHint').style.display = 'none';
+                    }, 3000);
                 };
                 
             } catch (err) {
@@ -410,73 +500,84 @@
             document.getElementById('errorScreen').style.display = 'flex';
         }
 
-        document.getElementById('startBtn').addEventListener('click', () => {
-            initCamera();
-        });
-
-        document.getElementById('retryBtn').addEventListener('click', () => {
-            document.getElementById('errorScreen').style.display = 'none';
-            document.getElementById('welcomeScreen').style.display = 'flex';
-        });
-
-        document.getElementById('measureBtn').addEventListener('click', () => {
+        function handleTap(e) {
             if (!cameraReady) return;
             
-            if (points.length < 2) {
-                const centerX = window.innerWidth / 2;
-                const centerY = window.innerHeight / 2;
-                
-                addPoint(centerX, centerY);
-                
-                if (points.length === 2) {
-                    calculateDistance();
-                }
-            }
-        });
+            // คำนวณตำแหน่งสัมพัทธ์กับ container
+            const container = document.getElementById('container');
+            const rect = container.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            console.log('Click position - clientX:', e.clientX, 'clientY:', e.clientY);
+            console.log('Container offset - left:', rect.left, 'top:', rect.top);
+            console.log('Relative position - x:', x, 'y:', y);
+            
+            addPoint(x, y);
+        }
 
-        document.getElementById('clearBtn').addEventListener('click', () => {
-            points = [];
-            document.querySelectorAll('.point, .line').forEach(el => el.remove());
-            document.getElementById('distance').style.display = 'none';
-        });
+        function handleTouch(e) {
+            e.preventDefault();
+            if (!cameraReady) return;
+            
+            const touch = e.touches[0];
+            
+            // คำนวณตำแหน่งสัมพัทธ์กับ container
+            const container = document.getElementById('container');
+            const rect = container.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            
+            console.log('Touch position - clientX:', touch.clientX, 'clientY:', touch.clientY);
+            console.log('Container offset - left:', rect.left, 'top:', rect.top);
+            console.log('Relative position - x:', x, 'y:', y);
+            
+            addPoint(x, y);
+        }
 
         function addPoint(x, y) {
+            console.log('=== เพิ่มจุดที่', points.length + 1, '===');
+            console.log('ตำแหน่ง x:', x, 'y:', y);
+            
             const point = document.createElement('div');
             point.className = 'point';
             point.style.left = x + 'px';
             point.style.top = y + 'px';
+            
+            // เพิ่มใน container แทน body
             document.getElementById('container').appendChild(point);
             
             points.push({ x, y, element: point });
-        }
-
-        function calculateDistance() {
-            if (points.length !== 2) return;
-
-            const p1 = points[0];
-            const p2 = points[1];
-
-            const dx = p2.x - p1.x;
-            const dy = p2.y - p1.y;
-            const pixelDistance = Math.sqrt(dx * dx + dy * dy);
-
-            const screenWidth = window.innerWidth;
-            const cameraHeight = 1.5;
             
-            const estimatedDistance = (pixelDistance / screenWidth) * cameraHeight * 5;
-            
-            const distanceDiv = document.getElementById('distance');
-            if (estimatedDistance < 1) {
-                distanceDiv.textContent = `${(estimatedDistance * 100).toFixed(0)} ซม.`;
+            // ถ้ามีจุดก่อนหน้า ให้วาดเส้นและคำนวณระยะ
+            if (points.length > 1) {
+                const prevPoint = points[points.length - 2];
+                const currentPoint = points[points.length - 1];
+                
+                drawLineWithDistance(prevPoint, currentPoint);
+                
+                document.getElementById('tapHint').textContent = '👆 แตะจุดถัดไป';
+                document.getElementById('tapHint').style.display = 'block';
+                setTimeout(() => {
+                    document.getElementById('tapHint').style.display = 'none';
+                }, 1500);
             } else {
-                distanceDiv.textContent = `${estimatedDistance.toFixed(2)} ม.`;
+                document.getElementById('tapHint').textContent = '👆 แตะจุดที่ 2';
+                document.getElementById('tapHint').style.display = 'block';
+                setTimeout(() => {
+                    document.getElementById('tapHint').style.display = 'none';
+                }, 1500);
             }
-            distanceDiv.style.display = 'block';
-
-            drawLine(p1, p2);
+            
+            console.log('จำนวนจุดทั้งหมด:', points.length);
         }
 
-        function drawLine(p1, p2) {
+        function drawLineWithDistance(p1, p2) {
+            console.log('=== วาดเส้นและคำนวณ ===');
+            
+            const container = document.getElementById('container');
+            
+            // วาดเส้น
             const line = document.createElement('div');
             line.className = 'line';
             
@@ -489,8 +590,104 @@
             line.style.left = p1.x + 'px';
             line.style.top = p1.y + 'px';
             line.style.transform = `rotate(${angle}deg)`;
+            container.appendChild(line);
             
-            document.getElementById('container').appendChild(line);
+            // คำนวณระยะทาง
+            const distance = calculateDistance(length);
+            
+            // สร้าง label แสดงระยะทาง (ตรงกลางเส้น)
+            const midX = (p1.x + p2.x) / 2;
+            const midY = (p1.y + p2.y) / 2;
+            
+            const label = document.createElement('div');
+            label.className = 'distance-label';
+            label.style.left = midX + 'px';
+            label.style.top = midY + 'px';
+            
+            if (distance < 1) {
+                label.textContent = `${(distance * 100).toFixed(0)} ซม.`;
+            } else {
+                label.textContent = `${distance.toFixed(2)} ม.`;
+            }
+            
+            container.appendChild(label);
+            
+            lines.push({ element: line, p1, p2 });
+            labels.push({ element: label, distance, midX, midY });
+            
+            console.log('ระยะทางของเส้นนี้:', distance.toFixed(2), 'เมตร');
+            console.log('=== จบการวาดเส้น ===');
+        }
+
+        function calculateDistance(pixelDistance) {
+            const fovDegrees = 65;
+            const fovRadians = (fovDegrees * Math.PI) / 180;
+            const screenWidthAtDistance = 2 * cameraDistance * Math.tan(fovRadians / 2);
+            const screenWidthPixels = window.innerWidth;
+            const metersPerPixel = screenWidthAtDistance / screenWidthPixels;
+            
+            return pixelDistance * metersPerPixel * scaleFactor;
+        }
+
+        function recalculateAll() {
+            // คำนวณระยะทางใหม่สำหรับทุกเส้น
+            labels.forEach((labelData, index) => {
+                const lineData = lines[index];
+                const dx = lineData.p2.x - lineData.p1.x;
+                const dy = lineData.p2.y - lineData.p1.y;
+                const pixelDistance = Math.sqrt(dx * dx + dy * dy);
+                
+                const distance = calculateDistance(pixelDistance);
+                
+                if (distance < 1) {
+                    labelData.element.textContent = `${(distance * 100).toFixed(0)} ซม.`;
+                } else {
+                    labelData.element.textContent = `${distance.toFixed(2)} ม.`;
+                }
+                
+                labelData.distance = distance;
+            });
+        }
+
+        function undoLastPoint() {
+            if (points.length === 0) return;
+            
+            // ลบจุดล่าสุด
+            const lastPoint = points.pop();
+            lastPoint.element.remove();
+            
+            // ลบเส้นล่าสุด (ถ้ามี)
+            if (lines.length > 0) {
+                const lastLine = lines.pop();
+                lastLine.element.remove();
+                
+                const lastLabel = labels.pop();
+                lastLabel.element.remove();
+            }
+            
+            console.log('ลบจุดล่าสุด, เหลือ', points.length, 'จุด');
+        }
+
+        function clearAll() {
+            // ลบจุดทั้งหมด
+            points.forEach(p => p.element.remove());
+            points = [];
+            
+            // ลบเส้นทั้งหมด
+            lines.forEach(l => l.element.remove());
+            lines = [];
+            
+            // ลบ label ทั้งหมด
+            labels.forEach(l => l.element.remove());
+            labels = [];
+            
+            document.getElementById('tapHint').textContent = '👆 แตะเพื่อมาร์คจุดแรก';
+            document.getElementById('tapHint').style.display = 'block';
+            setTimeout(() => {
+                document.getElementById('tapHint').style.display = 'none';
+            }, 2000);
+            
+            console.log('ล้างข้อมูลทั้งหมด');
         }
     </script>
 </body>
